@@ -2,8 +2,10 @@
 // based on the example from:
 // https://github.com/brendanzab/gl-rs/blob/master/gl/examples/triangle.rs
 
-use egui_glfw_gl::gl;
-use egui_glfw_gl::gl::types::*;
+use egui::{PaintCallback, PaintCallbackInfo, Response, Sense, Ui, Widget};
+use egui_glfw::gl::types::*;
+use egui_glfw::{gl, PaintCallbackFn};
+use std::sync::Arc;
 use std::{mem, ptr, str};
 
 use std::ffi::CString;
@@ -159,7 +161,7 @@ impl Triangle {
         }
     }
 
-    pub fn draw(&self) {
+    fn draw(&self) {
         unsafe {
             gl::BindVertexArray(self.vao);
 
@@ -197,6 +199,40 @@ impl Triangle {
 
         unsafe {
             gl::DrawArrays(gl::TRIANGLES, 0, 3);
+        }
+    }
+}
+
+pub struct TriangleWidget {
+    pub triangle: Arc<Triangle>,
+}
+
+impl Into<TriangleWidget> for Triangle {
+    fn into(self) -> TriangleWidget {
+        TriangleWidget {
+            triangle: Arc::new(self),
+        }
+    }
+}
+
+impl Widget for TriangleWidget {
+    fn ui(self, ui: &mut Ui) -> Response {
+        let (rect, response) = ui.allocate_exact_size(ui.available_size(), Sense::drag());
+        let callback = PaintCallback {
+            rect,
+            callback: std::sync::Arc::new(PaintCallbackFn::new(move |info, painter| {
+                self.triangle.draw();
+            })),
+        };
+        ui.painter().add(callback);
+        response
+    }
+}
+
+impl TriangleWidget {
+    pub fn clone(&self) -> TriangleWidget {
+        TriangleWidget {
+            triangle: self.triangle.clone(),
         }
     }
 }

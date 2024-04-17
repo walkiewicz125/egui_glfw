@@ -7,7 +7,6 @@ pub use gl;
 pub use glfw;
 
 pub mod painter;
-
 pub use painter::Painter;
 
 use egui::*;
@@ -38,15 +37,30 @@ impl EguiInputState {
     }
 }
 
+pub struct PaintCallbackFn {
+    f: Box<dyn Fn(PaintCallbackInfo, &Painter) + Sync + Send>,
+}
+
+impl PaintCallbackFn {
+    pub fn new<F: Fn(PaintCallbackInfo, &Painter) + Sync + Send + 'static>(callback: F) -> Self {
+        let f = Box::new(callback);
+        Self { f }
+    }
+}
+
 pub fn handle_event(event: glfw::WindowEvent, state: &mut EguiInputState) {
     use glfw::WindowEvent::*;
 
     match event {
-        FramebufferSize(width, height) => {
+        Size(width, height) => {
             state.input.screen_rect = Some(Rect::from_min_size(
                 Pos2::new(0f32, 0f32),
                 egui::vec2(width as f32, height as f32)
-                    / state.input.pixels_per_point.unwrap_or(1.0),
+                    / state
+                        .input
+                        .viewport()
+                        .native_pixels_per_point
+                        .unwrap_or(1.0),
             ));
         }
 
@@ -57,7 +71,7 @@ pub fn handle_event(event: glfw::WindowEvent, state: &mut EguiInputState) {
                     glfw::MouseButtonLeft => egui::PointerButton::Primary,
                     glfw::MouseButtonRight => egui::PointerButton::Secondary,
                     glfw::MouseButtonMiddle => egui::PointerButton::Middle,
-                    _ => unreachable!(),
+                    _ => egui::PointerButton::Primary,
                 },
                 pressed: true,
                 modifiers: state.modifiers,
@@ -71,7 +85,7 @@ pub fn handle_event(event: glfw::WindowEvent, state: &mut EguiInputState) {
                     glfw::MouseButtonLeft => egui::PointerButton::Primary,
                     glfw::MouseButtonRight => egui::PointerButton::Secondary,
                     glfw::MouseButtonMiddle => egui::PointerButton::Middle,
-                    _ => unreachable!(),
+                    _ => egui::PointerButton::Primary,
                 },
                 pressed: false,
                 modifiers: state.modifiers,
@@ -80,8 +94,18 @@ pub fn handle_event(event: glfw::WindowEvent, state: &mut EguiInputState) {
 
         CursorPos(x, y) => {
             state.pointer_pos = pos2(
-                x as f32 / state.input.pixels_per_point.unwrap_or(1.0),
-                y as f32 / state.input.pixels_per_point.unwrap_or(1.0),
+                x as f32
+                    / state
+                        .input
+                        .viewport()
+                        .native_pixels_per_point
+                        .unwrap_or(1.0),
+                y as f32
+                    / state
+                        .input
+                        .viewport()
+                        .native_pixels_per_point
+                        .unwrap_or(1.0),
             );
             state
                 .input
@@ -107,7 +131,9 @@ pub fn handle_event(event: glfw::WindowEvent, state: &mut EguiInputState) {
                 state.input.events.push(Event::Key {
                     key,
                     pressed: false,
+                    repeat: false,
                     modifiers: state.modifiers,
+                    physical_key: None,
                 });
             }
         }
@@ -143,7 +169,9 @@ pub fn handle_event(event: glfw::WindowEvent, state: &mut EguiInputState) {
                     state.input.events.push(Event::Key {
                         key,
                         pressed: true,
+                        repeat: false,
                         modifiers: state.modifiers,
+                        physical_key: None,
                     });
                 }
             }

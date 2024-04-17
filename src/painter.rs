@@ -3,11 +3,14 @@ extern crate gl;
 use egui::{
     emath::Rect,
     epaint::{Mesh, Primitive},
-    Color32, TextureFilter,
+    Color32, PaintCallbackInfo, TextureFilter,
 };
 
+use egui::Vec2;
 use gl::types::{GLchar, GLenum, GLint, GLsizeiptr, GLuint};
 use std::ffi::{c_void, CString};
+
+use crate::PaintCallbackFn;
 
 fn compile_shader(src: &str, ty: GLenum) -> GLuint {
     let shader = unsafe { gl::CreateShader(ty) };
@@ -89,7 +92,6 @@ fn link_program(vs: GLuint, fs: GLuint) -> GLuint {
     program
 }
 
-#[derive(Default)]
 pub struct UserTexture {
     size: (usize, usize),
 
@@ -235,14 +237,7 @@ impl Painter {
         }
     }
 
-    /// Main entry-point for painting a frame.
-    pub fn paint_primitives(
-        &mut self,
-        pixels_per_point: f32,
-        clipped_primitives: &[egui::ClippedPrimitive],
-    ) {
-        self.upload_user_textures();
-
+    fn set_default_painting_state(&mut self, pixels_per_point: f32) -> Vec2 {
         unsafe {
             //Let OpenGL know we are dealing with SRGB colors so that it
             //can do the blending correctly. Not setting the framebuffer
@@ -259,8 +254,8 @@ impl Painter {
         let u_screen_size = CString::new("u_screen_size").unwrap();
         let u_screen_size_ptr = u_screen_size.as_ptr();
         let u_screen_size_loc = unsafe { gl::GetUniformLocation(self.program, u_screen_size_ptr) };
-        let screen_size_pixels = egui::vec2(self.canvas_width as f32, self.canvas_height as f32);
-        let screen_size_points = screen_size_pixels / pixels_per_point;
+        let screen_size_px = egui::vec2(self.canvas_width as f32, self.canvas_height as f32);
+        let screen_size_points = screen_size_px / pixels_per_point;
 
         unsafe {
             gl::Uniform2f(
@@ -278,6 +273,18 @@ impl Painter {
             gl::Viewport(0, 0, self.canvas_width as i32, self.canvas_height as i32);
         }
 
+        screen_size_px
+    }
+
+    /// Main entry-point for painting a frame.
+    pub fn paint_primitives(
+        &mut self,
+        pixels_per_point: f32,
+        clipped_primitives: &[egui::ClippedPrimitive],
+    ) {
+        self.upload_user_textures();
+        let screen_size_px = self.set_default_painting_state(pixels_per_point);
+
         for egui::ClippedPrimitive {
             clip_rect,
             primitive,
@@ -287,12 +294,39 @@ impl Painter {
                 Primitive::Mesh(mesh) => {
                     self.paint_mesh(mesh, clip_rect, pixels_per_point);
                     unsafe {
-                        gl::Disable(gl::SCISSOR_TEST);
+                        gl::Disable(gl::SCISSOR_TEST); // TODO: needed?
                     }
                 }
 
-                Primitive::Callback(_) => {
-                    panic!("Custom rendering callbacks are not implemented in egui_glium");
+                Primitive::Callback(callback) => {
+                    if callback.rect.is_positive() {
+                        let info = egui::PaintCallbackInfo {
+                            viewport: callback.rect,
+                            clip_rect: *clip_rect,
+                            pixels_per_point,
+                            screen_size_px: [screen_size_px.x as u32, screen_size_px.y as u32],
+                        };
+
+                        let viewport_px = info.viewport_in_pixels();
+                        unsafe {
+                            gl::Viewport(
+                                viewport_px.left_px as i32,
+                                viewport_px.from_bottom_px as i32,
+                                viewport_px.width_px as i32,
+                                viewport_px.height_px as i32,
+                            );
+                        }
+
+                        if let Some(callback) = callback.callback.downcast_ref::<PaintCallbackFn>()
+                        {
+                            (callback.f)(info, self);
+                        } else {
+                            panic!("Warning: Unsupported render callback. Expected egui_glfw::PaintCallbackFn");
+                        }
+
+                        // Restore state:
+                        self.set_default_painting_state(pixels_per_point);
+                    }
                 }
             }
         }
@@ -357,17 +391,16 @@ impl Painter {
                 );
             }
 
-            let screen_size_pixels =
-                egui::vec2(self.canvas_width as f32, self.canvas_height as f32);
+            let screen_size_px = egui::vec2(self.canvas_width as f32, self.canvas_height as f32);
 
             let clip_min_x = pixels_per_point * clip_rect.min.x;
             let clip_min_y = pixels_per_point * clip_rect.min.y;
             let clip_max_x = pixels_per_point * clip_rect.max.x;
             let clip_max_y = pixels_per_point * clip_rect.max.y;
-            let clip_min_x = clip_min_x.clamp(0.0, screen_size_pixels.x);
-            let clip_min_y = clip_min_y.clamp(0.0, screen_size_pixels.y);
-            let clip_max_x = clip_max_x.clamp(clip_min_x, screen_size_pixels.x);
-            let clip_max_y = clip_max_y.clamp(clip_min_y, screen_size_pixels.y);
+            let clip_min_x = clip_min_x.clamp(0.0, screen_size_px.x);
+            let clip_min_y = clip_min_y.clamp(0.0, screen_size_px.y);
+            let clip_max_x = clip_max_x.clamp(clip_min_x, screen_size_px.x);
+            let clip_max_y = clip_max_y.clamp(clip_min_y, screen_size_px.y);
             let clip_min_x = clip_min_x.round() as i32;
             let clip_min_y = clip_min_y.round() as i32;
             let clip_max_x = clip_max_x.round() as i32;
@@ -541,7 +574,7 @@ impl Painter {
 
                         let gamma = 1.0;
                         let data: Vec<u8> = image
-                            .srgba_pixels(gamma)
+                            .srgba_pixels(Some(gamma))
                             .flat_map(|a| a.to_array())
                             .collect();
 
@@ -579,7 +612,7 @@ impl Painter {
 
                     let gamma = 1.0;
                     let pixels = image
-                        .srgba_pixels(gamma)
+                        .srgba_pixels(Some(gamma))
                         .flat_map(|a| a.to_array())
                         .collect();
 
