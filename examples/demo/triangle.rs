@@ -2,9 +2,9 @@
 // based on the example from:
 // https://github.com/brendanzab/gl-rs/blob/master/gl/examples/triangle.rs
 
-use egui::{PaintCallback, PaintCallbackInfo, Response, Sense, Ui, Widget};
-use egui_glfw::gl::types::*;
-use egui_glfw::{gl, PaintCallbackFn};
+use egui::{PaintCallback, Response, Sense, Ui, Widget};
+use egui_glfw::back_end::PaintCallbackFn;
+use gl::types::*;
 use std::sync::Arc;
 use std::{mem, ptr, str};
 
@@ -220,7 +220,7 @@ impl Widget for TriangleWidget {
         let (rect, response) = ui.allocate_exact_size(ui.available_size(), Sense::drag());
         let callback = PaintCallback {
             rect,
-            callback: std::sync::Arc::new(PaintCallbackFn::new(move |info, painter| {
+            callback: std::sync::Arc::new(PaintCallbackFn::new(move |_info, _painter| {
                 self.triangle.draw();
             })),
         };

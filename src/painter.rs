@@ -3,14 +3,14 @@ extern crate gl;
 use egui::{
     emath::Rect,
     epaint::{Mesh, Primitive},
-    Color32, PaintCallbackInfo, TextureFilter,
+    Color32, TextureFilter,
 };
 
 use egui::Vec2;
 use gl::types::{GLchar, GLenum, GLint, GLsizeiptr, GLuint};
 use std::ffi::{c_void, CString};
 
-use crate::PaintCallbackFn;
+use crate::back_end::PaintCallbackFn;
 
 fn compile_shader(src: &str, ty: GLenum) -> GLuint {
     let shader = unsafe { gl::CreateShader(ty) };
