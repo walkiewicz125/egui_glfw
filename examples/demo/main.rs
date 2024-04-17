@@ -1,4 +1,4 @@
-use egui_glfw::app_window::AppWindow;
+use egui_glfw::AppWindow;
 use triangle::TriangleWidget;
 
 const SCREEN_WIDTH: u32 = 800;
