@@ -217,7 +217,8 @@ impl Into<TriangleWidget> for Triangle {
 
 impl Widget for TriangleWidget {
     fn ui(self, ui: &mut Ui) -> Response {
-        let (rect, response) = ui.allocate_exact_size(ui.available_size(), Sense::drag());
+        let response = ui.allocate_response(ui.available_size(), Sense::click_and_drag());
+        let rect = response.rect;
         let callback = PaintCallback {
             rect,
             callback: std::sync::Arc::new(PaintCallbackFn::new(move |_info, _painter| {

@@ -44,7 +44,27 @@ fn main() {
             }
         });
 
-        egui::CentralPanel::default().show(egui_context, |ui| ui.add(triangle_widget.clone()));
+        egui::CentralPanel::default().show(egui_context, |ui| {
+            let response = ui
+                .add(triangle_widget.clone())
+                .on_hover_ui_at_pointer(|ui| {
+                    ui.label("on_hover_ui_at_pointer");
+                })
+                .on_hover_ui(|ui| {
+                    ui.label("on_hover_ui");
+                });
+            response.context_menu(|ui| {
+                ui.label("Context menu");
+                let btn = ui.button("button");
+                if btn.clicked() {
+                    println!("Button clicked");
+                }
+            });
+            if response.hovered() {
+                print!("Hovered\n");
+            }
+            response
+        });
 
         app_window.end_frame();
 
