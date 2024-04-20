@@ -4,9 +4,9 @@
 use std::{sync::mpsc::Receiver, time::Instant};
 
 use egui::{vec2, Pos2, Rect};
-use glfw::{Context, Glfw, WindowEvent, WindowHint};
+use glfw::{Context, Cursor, Glfw, PixelImage, WindowEvent, WindowHint};
 
-use crate::painter;
+use crate::{back_end::translate_cursor, painter};
 use painter::Painter;
 
 use crate::back_end;
@@ -106,6 +106,24 @@ impl AppWindow {
             pixels_per_point: native_pixels_per_point,
             viewport_output: _,
         } = self.egui_context.end_frame();
+
+        let cursor = match platform_output.cursor_icon {
+            egui::CursorIcon::None => {
+                let pixels = PixelImage {
+                    height: 1,
+                    width: 1,
+                    pixels: vec![0, 0, 0, 0],
+                };
+                let cursor_data = Cursor::create_from_pixels(pixels, 1, 1);
+
+                Some(cursor_data)
+            }
+            _ => Some(Cursor::standard(translate_cursor(
+                platform_output.cursor_icon,
+            ))),
+        };
+
+        self.window.set_cursor(cursor);
 
         //Handle cut, copy text from egui
         if !platform_output.copied_text.is_empty() {
