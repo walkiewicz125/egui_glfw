@@ -246,7 +246,7 @@ impl Painter {
 
             gl::Enable(gl::SCISSOR_TEST);
             gl::Enable(gl::BLEND);
-            gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA); // premultiplied alpha
+            gl::BlendFunc(gl::ONE, gl::ONE_MINUS_SRC_ALPHA);
             gl::UseProgram(self.program);
             gl::ActiveTexture(gl::TEXTURE0);
         }
